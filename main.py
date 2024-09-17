@@ -1,4 +1,5 @@
 import os
+import json
 from kivy.app import App
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -10,11 +11,28 @@ from kivy.uix.popup import Popup
 from kivy.uix.dropdown import DropDown
 import webbrowser  # Для открытия файла с помощью системы
 
+DATA_FILE = "bookshelf_data.json"  # Имя файла для сохранения списка книг
+
 class Book:
     def __init__(self, title, file_path):
         self.title = title
         self.file_path = file_path
         self.current_page = 0  # Текущая страница для отслеживания прогресса
+
+    def to_dict(self):
+        """Преобразуем объект книги в словарь для сохранения"""
+        return {
+            'title': self.title,
+            'file_path': self.file_path,
+            'current_page': self.current_page
+        }
+
+    @staticmethod
+    def from_dict(data):
+        """Создаем объект книги из словаря"""
+        book = Book(data['title'], data['file_path'])
+        book.current_page = data.get('current_page', 0)
+        return book
 
 class Bookshelf:
     def __init__(self):
@@ -30,12 +48,28 @@ class Bookshelf:
     def get_books(self):
         return self.books
 
+    def save_books(self):
+        """Сохраняем список книг в JSON файл"""
+        books_data = [book.to_dict() for book in self.books]
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(books_data, f, ensure_ascii=False, indent=4)
+    
+    def load_books(self):
+        """Загружаем книги из JSON файла, если он существует"""
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                books_data = json.load(f)
+                self.books = [Book.from_dict(book_data) for book_data in books_data]
+
 class BookshelfApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.shelf = Bookshelf()
     
     def build(self):
+        # Загружаем книги из файла при запуске
+        self.shelf.load_books()
+
         layout = BoxLayout(orientation='vertical', spacing=10)
 
         # Кнопки добавления и удаления книги
@@ -57,7 +91,11 @@ class BookshelfApp(App):
         layout.add_widget(self.bookshelf_view)
 
         return layout
-    
+
+    def on_stop(self):
+        """Сохраняем книги при завершении работы приложения"""
+        self.shelf.save_books()
+
     def update_bookshelf_view(self):
         # Визуальное обновление стеллажа
         grid_layout = GridLayout(cols=3, spacing=10, size_hint_y=None)
